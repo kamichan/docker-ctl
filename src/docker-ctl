@@ -1,0 +1,2 @@
+#!/bin/bash
+python2.7 "$(cd `dirname $0`; pwd)/main.py"
