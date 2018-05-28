@@ -13,7 +13,6 @@ class Console:
         self.matches   = []
         self.docker    = Docker()
         self.commands  = {
-            'select'    : self.select_command,
             'history'   : self.history_command,
             'clear'     : self.clear_command,
             'exit'      : self.exit_command,
@@ -90,13 +89,19 @@ class Console:
     def completer(self, text, state):
         # handle matches
         if state == 0:
-            commands = []
+            commands    = []
+            line_buffer = readline.get_line_buffer().strip()
+
+            cmd = line_buffer
+            if ' ' in line_buffer:
+                cmd = line_buffer.split(' ')[0]
+
             if self.docker.in_container():
-                # container's commands
-                commands = self.docker.container.commands.keys()
+                commands = self.docker.container.get_command_list()
+            elif cmd == 'select':
+                commands = self.docker.get_container_ids()
             else:
-                # docker-ctl and docker's commands
-                commands = self.commands.keys() + self.docker.commands.keys()
+                commands = self.get_command_list()
 
             if text == '':
                 self.matches = commands
@@ -119,16 +124,12 @@ class Console:
 
         return matches
 
-    # Invalid operation
-    def invalid_operation(self, cmd, args):
-        print('Invalid operation: %s %s' % (cmd, args))
+    def get_command_list(self):
+        return self.commands.keys() + self.docker.get_command_list()
 
-    # Command: select
-    def select_command(self, args):
-        if args != '':
-            self.docker.enter_container(args)
-        else:
-            print('Invalid container')
+    # print_invalid operation
+    def print_invalid_operation(self, cmd, args):
+        print('Invalid operation: %s %s' % (cmd, args))
 
     # Command: history
     def history_command(self, args):
@@ -139,14 +140,14 @@ class Console:
         elif args == '--clear':
             readline.clear_history()
         else:
-            self.invalid_operation('history', args)
+            self.print_invalid_operation('history', args)
 
     # Command: clear
     def clear_command(self, args):
         if args == '':
             Process('clear').execute(True)
         else:
-            self.invalid_operation('clear', args)
+            self.print_invalid_operation('clear', args)
 
     # Command: exit
     def exit_command(self, args):
@@ -158,4 +159,4 @@ class Console:
         elif args == '--all':
             self.stop_daemon()
         else:
-            self.invalid_operation('exit', args)
+            self.print_invalid_operation('exit', args)

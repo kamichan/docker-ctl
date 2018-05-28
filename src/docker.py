@@ -8,7 +8,10 @@ class Docker:
 
     def __init__(self):
         self.container = None
-        self.commands   = {
+        self.commands  = {
+            'select'    : self.select_command,
+        }
+        self.docker_commands   = {
             'attach'    : None,
             'build'     : None,
             'commit'    : None,
@@ -77,8 +80,35 @@ class Docker:
     def call(self, cmd, args):
         if self.in_container():
             self.container.call(cmd, args)
+        elif self.commands.has_key(cmd):
+            handler = self.commands[cmd]
+            handler(args)
         else:
             Process('docker', '%s %s' % (cmd, args)).execute(True)
+
+    # Get docker's commands and extended commands
+    def get_command_list(self):
+        return self.docker_commands.keys() + self.commands.keys()
+
+    # Get container list
+    def get_container_ids(self, running = False):
+        if running:
+            directive = 'ps -q'
+        else:
+            directive = 'ps -a -q'
+
+        status, output = self.execute(directive)
+        if status == 0:
+            return output
+
+        return []
+
+    # Command: select
+    def select_command(self, args):
+        if args != '':
+            self.enter_container(args)
+        else:
+            print('Invalid container')
 
 class Container:
 
@@ -118,6 +148,10 @@ class Container:
             return self.aliases[alias]
         else:
             return alias
+
+    # Get container's commands and extended commands
+    def get_command_list(self):
+        return self.commands.keys()
 
     # Command: alias
     def alias_command(self, args):
