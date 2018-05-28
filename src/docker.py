@@ -3,13 +3,14 @@
 import sys
 import subprocess
 from process import Process
+from command import Command
 
 class Docker:
 
     def __init__(self):
         self.container = None
         self.commands  = {
-            'select'    : self.select_command,
+            'select'    : Command(self.select_command,  self.get_container_ids),
         }
         self.docker_commands   = {
             'attach'    : None,
@@ -81,8 +82,7 @@ class Docker:
         if self.in_container():
             self.container.call(cmd, args)
         elif self.commands.has_key(cmd):
-            handler = self.commands[cmd]
-            handler(args)
+            self.commands[cmd].handle(args)
         else:
             Process('docker', '%s %s' % (cmd, args)).execute(True)
 
@@ -91,7 +91,7 @@ class Docker:
         return self.docker_commands.keys() + self.commands.keys()
 
     # Get container list
-    def get_container_ids(self, running = False):
+    def get_container_ids(self, running=True):
         if running:
             directive = 'ps -q'
         else:
@@ -121,7 +121,7 @@ class Container:
             'll'    : 'ls -alF --color=auto',
         }
         self.commands   = {
-            'alias' : self.alias_command,
+            'alias' : Command(self.alias_command,   []),
         }
         # not supported
         self.forbidden = ['cd']
@@ -138,8 +138,7 @@ class Container:
         if cmd in self.forbidden: # forbidden
             self.not_supported_command(args)
         elif self.commands.has_key(cmd): # docker-ctl's commands
-            handler = self.commands[cmd]
-            handler(args)
+            self.commands[cmd].handle(args)
         else: # container's commands
             Process('docker', 'exec --user=root -it %s %s %s' % (self.id, self.alias(cmd), args)).execute(True)
 

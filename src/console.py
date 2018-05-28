@@ -5,6 +5,7 @@ import atexit
 import readline
 from docker   import Docker
 from process  import Process
+from command  import Command
 
 class Console:
 
@@ -13,9 +14,9 @@ class Console:
         self.matches   = []
         self.docker    = Docker()
         self.commands  = {
-            'history'   : self.history_command,
-            'clear'     : self.clear_command,
-            'exit'      : self.exit_command,
+            'history'   : Command(self.history_command,     ['--clear']),
+            'clear'     : Command(self.clear_command,       []),
+            'exit'      : Command(self.exit_command,        ['--all']),
         }
         self.history   = os.path.join(os.environ['HOME'], '.docker_ctl_history')
 
@@ -25,8 +26,10 @@ class Console:
         self.init_history()
         # completer
         readline.set_completer(self.completer)
+        readline.set_completer_delims(' \t\n;')
         # save history when exiting
         atexit.register(readline.write_history_file, self.history)
+
 
     # Initialize history
     def init_history(self):
@@ -53,7 +56,7 @@ class Console:
                 break
 
             # tab char replace to space
-            directive = directive.replace("\t", ' ')
+            directive = directive.replace('\t', ' ')
 
             cmd  = ''
             args = ''
@@ -67,8 +70,7 @@ class Console:
 
             # exit
             if self.commands.has_key(cmd):
-                handler = self.commands[cmd]
-                handler(args)
+                self.commands[cmd].handle(args)
             else:
                 self.docker.call(cmd, args)
 
@@ -90,18 +92,25 @@ class Console:
         # handle matches
         if state == 0:
             commands    = []
-            line_buffer = readline.get_line_buffer().strip()
+            line_buffer = readline.get_line_buffer()
 
-            cmd = line_buffer
+            cmd = ''
             if ' ' in line_buffer:
                 cmd = line_buffer.split(' ')[0]
 
             if self.docker.in_container():
-                commands = self.docker.container.get_command_list()
-            elif cmd == 'select':
-                commands = self.docker.get_container_ids()
+                if cmd != '' and self.docker.container.commands.has_key(cmd):
+                    commands = self.docker.container.commands[cmd].list_args()
+                else:
+                    commands = self.docker.container.get_command_list()
             else:
-                commands = self.get_command_list()
+                if cmd != '':
+                    if self.commands.has_key(cmd):
+                        commands = self.commands[cmd].list_args()
+                    elif self.docker.commands.has_key(cmd):
+                        commands = self.docker.commands[cmd].list_args()
+                else:
+                    commands = self.get_command_list()
 
             if text == '':
                 self.matches = commands
@@ -109,7 +118,11 @@ class Console:
                 self.matches = self.matches_generator(text, commands)
 
         try:
-            return self.matches[state]
+            if len(self.matches) == 1 and self.matches[0] == text:
+                readline.insert_text(' ')
+                return None
+            else:
+                return self.matches[state]
         except IndexError:
             pass
 
